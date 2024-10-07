@@ -1,10 +1,9 @@
-
-var axios = require('axios');
+const axios = require('axios');
 
 const tabela = 'igpm'
 const apikey = 'sua-api-key'
 
-var params = new URLSearchParams();
+let params = new URLSearchParams();
 params.append('tabela', tabela);
 params.append('apikey', apikey)
 
