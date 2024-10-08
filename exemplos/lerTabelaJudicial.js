@@ -12,7 +12,7 @@ params.append('tabela',  tabela);
 params.append('dataAtualizacao',  dataAtualizacao);
 params.append('dataInicioSelic',  dataInicioSelic);
 
-params.append('apikey', '12cfbf91-ef76-4615-ab87-da15cb65cb23' )
+params.append('apikey', 'sua-api-key' )
 
 const url = 'https://client-api.debit.com.br/atualiza-v1/lerTabela'
 
