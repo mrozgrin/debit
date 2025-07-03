@@ -7,11 +7,12 @@ const lista = [
     {"dia":"01/02/2010","valor":20000}
 ]
 
-var params = new URLSearchParams();
-params.append('dataAtualizacao',  dataAtualizacao);
-params.append('indiceAtualizacao', indiceAtualizacao);
-params.append('lista', JSON.stringify(lista) );
-params.append('apikey', 'sua-api-key' )
+const params = {
+    dataAtualizacao: dataAtualizacao,
+    indiceAtualizacao: indiceAtualizacao,
+    lista: lista,
+    apikey: 'sua-api-key-aqui',
+}
 
 const url = 'https://client-api.debit.com.br/atualiza-v1/atualiza'
 
