@@ -52,16 +52,8 @@ Por questões de segurança, todas as requisições serão feitas através do pr
 
 + Endpoint
 
-    [POST] https://client-api.debit.com.br/atualiza-v1/listaTabelas
+    [GET] https://client-api.debit.com.br/atualiza-v1/listaTabelas
 
-
-+ Request (application/json)
-
-    + Body
-
-            {
-              "apikey": "sua-api-key"
-            }
 
 + Response 200 (application/json)
   A listagem de quais tabelas pode ser visualizadas
@@ -110,7 +102,7 @@ Por questões de segurança, todas as requisições serão feitas através do pr
 
     tabela: para pegar a relação de tabelas disponíveis utilize o endereço: 
     [ https://client-api.debit.com.br/atualiza-v1/listaTabelas ]
-    
+
 + Request (application/json)
 
     + Body
