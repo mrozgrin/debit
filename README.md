@@ -46,13 +46,14 @@ Existe o limite de `60` requisições por minuto por aplicação+usuário.
 
 Por questões de segurança, todas as requisições serão feitas através do protocolo `HTTPS`.
 
-# Group Recursos
+# Comandos da API
 
-### listaTabelas
+## listaTabelas
 
 + Endpoint
 
-[POST] https://client-api.debit.com.br/atualiza-v1/listaTabelas
+    [POST] https://client-api.debit.com.br/atualiza-v1/listaTabelas
+
 
 + Request (application/json)
 
@@ -99,52 +100,40 @@ Por questões de segurança, todas as requisições serão feitas através do pr
 
 
 
-### listaTabelas
+## lerTabela
 
 + Endpoint
 
-[POST] https://client-api.debit.com.br/atualiza-v1/listaTabelas
+    [POST] https://client-api.debit.com.br/atualiza-v1/lerTabela
 
++ Parametros
+
+    tabela: para pegar a relação de tabelas disponíveis utilize o endereço: 
+    [ https://client-api.debit.com.br/atualiza-v1/listaTabelas ]
+    
 + Request (application/json)
 
     + Body
 
             {
-              "apikey": "sua-api-key"
+              "apikey": "sua-api-key",
+              "tabela": "igpm"
             }
 
 + Response 200 (application/json)
-  A listagem de quais tabelas pode ser visualizadas
+  Mostrará todo o histórico de uma tabela
 
     + Body
 
             [
-            { tabela: 'btn', nome: 'ORTN / OTN / BTN / BTN-TR' },
-            { tabela: 'igp', nome: 'IGP-DI (FGV)' },
-            { tabela: 'ipc_fgv', nome: 'IPC-DI (FGV)' },
-            { tabela: 'ipc_fipe', nome: 'IPC (Fipe)' },
-            { tabela: 'poupanca', nome: 'Poupança' },
-            { tabela: 'salariominimo', nome: 'Salário Mínimo' },
-            { tabela: 'cub', nome: 'CUB (Sinduscon)' },
-            { tabela: 'tr', nome: 'TR (Bacen)' },
-            { tabela: 'dolar', nome: 'Dólar Comercial Venda' },
-            { tabela: 'igpm', nome: 'IGP-M (FGV)' },
-            { tabela: 'ipca', nome: 'IPCA (IBGE)' },
-            { tabela: 'inpc', nome: 'INPC (IBGE)' },
-            { tabela: 'selic', nome: 'Selic (cálculo simples)' },
-            { tabela: 'ufesp', nome: 'Ufesp' },
-            { tabela: 'ufir', nome: 'Ufir (Mensal)' },
-            { tabela: 'ufm_sp', nome: 'Ufm' },
-            { tabela: 'tbf', nome: 'TBF' },
-            { tabela: 'upc', nome: 'UPC' },
-            { tabela: 'tjlp', nome: 'TJLP (BACEN)' },
-            { tabela: 'incc', nome: 'INCC-DI (FGV)' },
-            { tabela: 'cdi', nome: 'CDI' },
-            { tabela: 'euro', nome: 'Euro (compra)' },
-            { tabela: 'ipc_r', nome: 'IPC-r' },
-            { tabela: 'ipa_di', nome: 'IPA-DI (FGV)' },
-            { tabela: 'ipcae', nome: 'IPCA-E (IBGE)' },
-            { tabela: 'ivar', nome: 'IVAR (FGV)' },
-            { tabela: 'irsm', nome: 'IRSM' }
+            { data: '06/1989', valor: 19.68 },
+            { data: '07/1989', valor: 35.91 },
+            { data: '08/1989', valor: 36.92 },
+            { data: '09/1989', valor: 39.92 },
+            { data: '10/1989', valor: 40.64 },
+            { data: '11/1989', valor: 40.48 },
+            { data: '12/1989', valor: 47.13 },
+            { data: '01/1990', valor: 61.46 }
             ]
+
 
