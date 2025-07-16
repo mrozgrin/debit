@@ -1,3 +1,3 @@
-## Licença
+## LICENSE
 
 This project is licensed under the MIT License. This allows use, copying, modification, distribution, and sale of the software, provided that the copyright notice and permission are included in all copies or substantial portions of the software.
