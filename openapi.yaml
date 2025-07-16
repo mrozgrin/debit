@@ -1,0 +1,101 @@
+openapi: 3.0.0
+info:
+  title: Debit API - Cálculos de atualização monetária e consulta de tabelas
+  version: 1.0.0
+  description: API pública da Debit para consulta e atualização de índices econômicos e tabelas judiciais.
+servers:
+- url: https://client-api.debit.com.br/atualiza-v1/
+  description: Servidor de API
+paths:
+  /atualiza-v1/listaTabelas:
+    get:
+      summary: Lista de tabelas disponíveis
+      description: Retorna as tabelas que podem ser consultadas ou atualizadas.
+      responses:
+        '200':
+          description: Lista de tabelas
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    tabela:
+                      type: string
+                    nome:
+                      type: string
+                    permiteSelic:
+                      type: boolean
+  /atualiza-v1/lerTabela:
+    post:
+      summary: Consulta de valores de índice
+      description: Consulta os valores atualizados de um índice específico.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - apikey
+              - tabela
+              - dataAtualizacao
+              properties:
+                apikey:
+                  type: string
+                tabela:
+                  type: string
+                dataAtualizacao:
+                  type: string
+                  format: date
+                dataInicioSelic:
+                  type: string
+                  format: date
+      responses:
+        '200':
+          description: Valores retornados com sucesso
+        '400':
+          description: Erro na autenticação ou dados inválidos
+  /atualiza-v1/atualiza:
+    post:
+      summary: Atualiza valores informados
+      description: Processa uma lista de valores históricos aplicando os índices de
+        atualização monetária.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - indiceAtualizacao
+              - dataAtualizacao
+              - lista
+              - apikey
+              properties:
+                apikey:
+                  type: string
+                indiceAtualizacao:
+                  type: string
+                dataAtualizacao:
+                  type: string
+                  format: date
+                lista:
+                  type: array
+                  items:
+                    type: object
+                    required:
+                    - dia
+                    - valor
+                    properties:
+                      dia:
+                        type: string
+                        format: date
+                      valor:
+                        type: number
+      responses:
+        '200':
+          description: Cálculo realizado com sucesso
+        '400':
+          description: Erro nos dados ou autenticação
