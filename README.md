@@ -59,33 +59,8 @@ Por questões de segurança, todas as requisições serão feitas através do pr
     + Body
 
             [
-                { tabela: 'btn', nome: 'ORTN / OTN / BTN / BTN-TR' },
-                { tabela: 'igp', nome: 'IGP-DI (FGV)' },
-                { tabela: 'ipc_fgv', nome: 'IPC-DI (FGV)' },
-                { tabela: 'ipc_fipe', nome: 'IPC (Fipe)' },
-                { tabela: 'poupanca', nome: 'Poupança' },
-                { tabela: 'salariominimo', nome: 'Salário Mínimo' },
-                { tabela: 'cub', nome: 'CUB (Sinduscon)' },
-                { tabela: 'tr', nome: 'TR (Bacen)' },
-                { tabela: 'dolar', nome: 'Dólar Comercial Venda' },
-                { tabela: 'igpm', nome: 'IGP-M (FGV)' },
-                { tabela: 'ipca', nome: 'IPCA (IBGE)' },
-                { tabela: 'inpc', nome: 'INPC (IBGE)' },
-                { tabela: 'selic', nome: 'Selic (cálculo simples)' },
-                { tabela: 'ufesp', nome: 'Ufesp' },
-                { tabela: 'ufir', nome: 'Ufir (Mensal)' },
-                { tabela: 'ufm_sp', nome: 'Ufm' },
-                { tabela: 'tbf', nome: 'TBF' },
-                { tabela: 'upc', nome: 'UPC' },
-                { tabela: 'tjlp', nome: 'TJLP (BACEN)' },
-                { tabela: 'incc', nome: 'INCC-DI (FGV)' },
-                { tabela: 'cdi', nome: 'CDI' },
-                { tabela: 'euro', nome: 'Euro (compra)' },
-                { tabela: 'ipc_r', nome: 'IPC-r' },
-                { tabela: 'ipa_di', nome: 'IPA-DI (FGV)' },
-                { tabela: 'ipcae', nome: 'IPCA-E (IBGE)' },
-                { tabela: 'ivar', nome: 'IVAR (FGV)' },
-                { tabela: 'irsm', nome: 'IRSM' }
+                { tabela: 'btn', nome: 'ORTN / OTN / BTN / BTN-TR', permiteSelic: false },
+                { tabela: 'igp', nome: 'IGP-DI (FGV)', permiteSelic: false } 
             ]
 
 
@@ -106,8 +81,10 @@ Por questões de segurança, todas as requisições serão feitas através do pr
     + Body
 
             {
-              "apikey": "sua-api-key",
-              "tabela": "igpm"
+              "apikey": "sua-api-key",   
+              "tabela": "igpm",               // escolha a tabela. Veja a lista de tabelas disponíveis: https://client-api.debit.com.br//atualiza-v1/listaTabelas
+              dataAtualizacao: "01/04/2025",  // Se o campo permiteSelic for true, informe a data de atualização da tabela
+              dataInicioSelic: "01/06/2024"   // Se o campo permiteSelic for true, informe a data de inicial da Selic 
             }
 
 + Response 200 (application/json)
