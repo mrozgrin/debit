@@ -12,9 +12,7 @@ Recursos disponíveis para acesso via API:
 ## URLs de acesso
 O Debit não possui sandbox (ambiente de homologação). Cada conta do Debit é isolada das outras (multi-tenant), sugerimos aos desenvolvedores que criem uma conta de testes, e depois utilizem a conta de produção com os dados dos clientes.
 
-Para testar a API, crie uma conta gratuitamente, acesse o sistema e clique no menu configurações. Na aba API você gera a api_key.
-
-URL homologação/produção (ex: contatos): https://api.egestor.com.br/api/v1/contatos
+Para testar a API, crie uma conta gratuitamente, acesse o sistema e clique no menu configurações. Na aba API você gera a api_key (https://app.debit.com.br/menu/api).
 
 
 ## Métodos
