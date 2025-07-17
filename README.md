@@ -93,14 +93,54 @@ Por questões de segurança, todas as requisições serão feitas através do pr
     + Body
 
             [
-            { data: '06/1989', valor: 19.68 },
-            { data: '07/1989', valor: 35.91 },
-            { data: '08/1989', valor: 36.92 },
-            { data: '09/1989', valor: 39.92 },
-            { data: '10/1989', valor: 40.64 },
-            { data: '11/1989', valor: 40.48 },
-            { data: '12/1989', valor: 47.13 },
-            { data: '01/1990', valor: 61.46 }
+              { data: '06/1989', valor: 19.68 },
+              { data: '07/1989', valor: 35.91 },
+              { data: '08/1989', valor: 36.92 },
+              { data: '09/1989', valor: 39.92 },
+              { data: '10/1989', valor: 40.64 },
+              { data: '11/1989', valor: 40.48 },
+              { data: '12/1989', valor: 47.13 },
+              { data: '01/1990', valor: 61.46 }
             ]
 
 
+## atualiza
+
++ Endpoint
+
+    [POST] https://client-api.debit.com.br/atualiza-v1/atualiza
+
++ Parametros
+
+    tabela: para pegar a relação de tabelas disponíveis utilize o endereço: 
+    [ https://client-api.debit.com.br/atualiza-v1/listaTabelas ]
+
++ Request (application/json)
+
+    + Body
+
+            {
+              "apikey": "sua-api-key",   
+              "indiceAtualizacao": "igpm",    // escolha a tabela. Veja a lista de tabelas disponíveis: https://client-api.debit.com.br//atualiza-v1/listaTabelas
+              dataAtualizacao: "01/04/2025",  // data final que os valores serão atualizadas
+              lista: [                        // relação de valores a atualizar
+                        {"dia":"01/01/2010","valor":10000}, 
+                        {"dia":"01/02/2010","valor":20000}
+                    ]           
+            }
+
++ Response 200 (application/json)
+  Mostrará todo o histórico de uma tabela
+
+    + Body
+
+            {
+              dataAtualizacao: '01/01/2023',
+              indiceAtualizacao: 'igpm',
+              lista: [
+                { dia: '01/01/2010', valor: 10000, resultado: 28716.613105645243 },
+                { dia: '01/02/2010', valor: 20000, resultado: 57073.66213979407 }
+              ],
+              apikey: '1d070583-b71b-49ab-adf8-df780b0e4f11',
+              resultado: 85790.27524543932
+            }
