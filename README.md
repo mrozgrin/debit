@@ -141,6 +141,5 @@ Por questões de segurança, todas as requisições serão feitas através do pr
                 { dia: '01/01/2010', valor: 10000, resultado: 28716.613105645243 },
                 { dia: '01/02/2010', valor: 20000, resultado: 57073.66213979407 }
               ],
-              apikey: '1d070583-b71b-49ab-adf8-df780b0e4f11',
               resultado: 85790.27524543932
             }
