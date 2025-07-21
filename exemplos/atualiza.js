@@ -15,8 +15,8 @@ const params = {
     apikey: process.env.API_KEY,
 }
 
-// const url = 'https://client-api.debit.com.br/atualiza-v1/atualiza'
-const url = 'http://localhost:3102/atualiza-v1/atualiza'
+const url = 'https://client-api.debit.com.br/atualiza-v1/atualiza'
+
 
 axios.post(url, params).
 then(function (resposta) {
