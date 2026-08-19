@@ -2,7 +2,17 @@ openapi: 3.0.0
 info:
   title: Debit API - Cálculos de atualização monetária e consulta de tabelas
   version: 1.0.0
-  description: API pública da Debit para consulta e atualização de índices econômicos e tabelas judiciais.
+  description: |
+    API pública da Debit para consulta e atualização de índices econômicos e tabelas judiciais.
+
+    Autenticação: a api_key gerada em https://app.debit.com.br/menu/api, enviada no campo `apikey`.
+
+    A mesma api_key também autentica a Debit API nova (REST `/v1` e servidor MCP) em
+    https://mcp.debit.com.br, que cobre as calculadoras completas (judicial, trabalhista,
+    previdenciário, pensão alimentícia, cartão de ponto, financiamento), exportação em
+    PDF/HTML/Excel e extração de documentos por IA. Lá a chave vai no cabeçalho
+    `Authorization: Bearer <api_key>`; MCP em https://mcp.debit.com.br/mcp; manual em
+    https://mcp.debit.com.br/v1/guia.
 servers:
 - url: https://client-api.debit.com.br/atualiza-v1/
   description: Servidor de API

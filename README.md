@@ -15,6 +15,27 @@ O Debit não possui sandbox (ambiente de homologação). Cada conta do Debit é 
 Para testar a API, crie uma conta gratuitamente, acesse o sistema e clique no menu configurações. Na aba API você gera a api_key (https://app.debit.com.br/menu/api).
 
 
+## Autenticação
+
+Nesta API a chave vai no campo `apikey` do corpo da requisição (ou no cabeçalho `Authorization`, conforme o endpoint).
+
+**A mesma api_key também autentica a Debit API nova (`/v1`) e o servidor MCP**, que vão além da atualização monetária: calculadoras completas (judicial, trabalhista, previdenciário, pensão alimentícia, cartão de ponto, financiamento), exportação em PDF/HTML/Excel e extração de documentos por IA — com os cálculos salvos na conta do usuário. Lá a chave viaja no cabeçalho:
+
+```bash
+curl -s "https://mcp.debit.com.br/v1/indices" \
+  -H "Authorization: Bearer SUA_API_KEY"
+```
+
+| | Esta API (`atualiza-v1`) | Debit API nova |
+|---|---|---|
+| Chave | `apikey` no body | `Authorization: Bearer <api_key>` |
+| Base URL | `https://client-api.debit.com.br` | `https://mcp.debit.com.br` |
+| MCP (agentes de IA) | — | `https://mcp.debit.com.br/mcp` |
+| Documentação | este repositório | `/v1/guia`, `/v1/docs` e `/v1/openapi.json` |
+
+Apagar a chave em https://app.debit.com.br/menu/api revoga o acesso nas duas APIs imediatamente. Esta API continua funcionando exatamente como descrito abaixo. Durante a fase de testes, o acesso à API nova é liberado por conta — solicite pelo e-mail debit@debit.com.br.
+
+
 ## Métodos
 Requisições para a API devem seguir os padrões:
 | Método | Descrição |
