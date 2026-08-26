@@ -1,111 +1,1569 @@
-openapi: 3.0.0
+# Debit API — especificação OpenAPI 3.1
+#
+# Gerado a partir de https://mcp.debit.com.br/v1/openapi.json em 26/08/2026.
+# Não edite à mão: a fonte é a própria API.
+#
+# A API antiga de atualização monetária foi descontinuada e NÃO está aqui.
+
+openapi: 3.1.0
 info:
-  title: Debit API - Cálculos de atualização monetária e consulta de tabelas
+  title: Debit API
   version: 1.0.0
-  description: |
-    API pública da Debit para consulta e atualização de índices econômicos e tabelas judiciais.
+  x-logo:
+    url: https://www.debit.com.br/img/logo.png
+    altText: Debit
+  description: |-
+    > **Retrato da especificação em 26/08/2026.** A versão canônica e sempre atual é servida
+    > pela própria API, em https://mcp.debit.com.br/v1/openapi.json — prefira-a em geradores de
+    > cliente. Manual: https://mcp.debit.com.br/v1/guia · Referência: https://mcp.debit.com.br/v1/docs
+    >
+    > A API antiga de atualização monetária foi **descontinuada** e não é
+    > descrita por esta especificação.
 
-    Autenticação: a api_key gerada em https://app.debit.com.br/menu/api, enviada no campo `apikey`.
+    API unificada da **debit** para cálculos jurídicos e financeiros do Brasil (Lei 14.905/2024, manual CNJ 2022, EC 103/2019), com alta precisão e os mesmos motores do site.
 
-    A mesma api_key também autentica a Debit API nova (REST `/v1` e servidor MCP) em
-    https://mcp.debit.com.br, que cobre as calculadoras completas (judicial, trabalhista,
-    previdenciário, pensão alimentícia, cartão de ponto, financiamento), exportação em
-    PDF/HTML/Excel e extração de documentos por IA. Lá a chave vai no cabeçalho
-    `Authorization: Bearer <api_key>`; MCP em https://mcp.debit.com.br/mcp; manual em
-    https://mcp.debit.com.br/v1/guia.
+    ## Autenticação
+    TODAS as rotas exigem `Authorization: Bearer <credencial>`, exceto `/health` e `/v1/auth/*`. A credencial pode ser:
+
+    | Tipo | Formato | Obtido em | Uso |
+    |------|---------|-----------|-----|
+    | **Chave do site** | UUID (`b62d5a5f-…`) | Painel debit → menu **API** | Jeito mais simples; todos os escopos |
+    | **Chave de API** | `dbt_live_…` / `dbt_test_…` | `POST /v1/keys` | Servidor a servidor, agentes; escopos restritos |
+    | **JWT** | `eyJ…` (15 min) | `POST /v1/auth/login` | Sessão humana; **obrigatório** para gerenciar chaves |
+    | **OAuth 2.1** | Bearer emitido via "Login com Debit" | `/authorize` (PKCE + DCR) | Conectores MCP (Claude, ChatGPT) |
+
+    Sem credencial válida → **401**. Escopo insuficiente → **403**.
+
+    ## Escopos
+    `index:read` · `calc:read` · `calc:write` · `calc:export` · `extract:run` · `account:read`. Uma chave nasce com todos por padrão; restrinja em `POST /v1/keys`. A chave criada no site não tem seletor de escopo — recebe todos.
+
+    ## Tipos de cálculo
+    `atualizacaoMonetaria`, `calculosJudiciais`, `cartaoPonto`, `pensaoAlimenticia`, `saldoDevedor`, `tabelasFinanciamento`, `tabelasJudiciais`, `prevDifNRecebidas`. Use `GET /v1/describe/{type}` para o schema de campos de cada um.
+
+    ## Correção: índice x tabela judicial
+
+    São duas famílias diferentes, em **rotas e espaços de id separados**:
+
+    - **Índice** — uma série só (IPCA-E, INPC, Selic). `GET /v1/indices`, resolve por `slug` ou `id`.
+    - **Tabela judicial** — diz qual índice corrige **cada mês** e quais juros incidem (CJF, TJ/SP, TJ/MG). `GET /v1/tables`; o `id` publicado é o **`calcId` real**, o mesmo espaço de id das tabelas que você cria com `type: "tabelasJudiciais"`.
+
+    Onde cada uma entra:
+
+    | Tipo | Índice | Tabela judicial |
+    |---|---|---|
+    | `atualizacaoMonetaria` | `indexador` | `tabelaJudicial` (campos **separados**; mandar os dois é `400`) |
+    | `calculosJudiciais`, `prevDifNRecebidas` | — | `indexador` (`-1` = série inline em `tabelaPersonalizada`) |
+
+    > **Mudou em 26/08/2026.** As tabelas vinham dentro de `GET /v1/indices`, como as entradas **sem `slug`**, e com o id **somado de 1000**. Aquele número nunca funcionou em `indexador`: o motor procurava outra tabela (ou nenhuma) e o cálculo voltava com o **valor nominal** — coeficiente 1, `resumoTab.indexador: 0`, sem juros e sem SELIC, com `HTTP 200` e sem erro. Hoje ele é recusado com `400 INDEX_LEGACY_ID` informando o id correto, e `legacyCatalogId` em `/v1/tables` permite reconhecê-lo. Índice onde se espera tabela (e vice-versa) é `400 INDEX_NOT_TABLE`; tabela inexistente é `400 TABLE_NOT_FOUND`.
+
+    O tipo `tabelasJudiciais` **não calcula valores** — ele monta a tabela (série `vl` de marcos {mês, índice} + faixas de juros) que os cálculos consomem.
+
+    ## Cálculos salvos
+    Criar/rodar um cálculo grava na **conta real do usuário** — ele aparece no dashboard do site. O fluxo é: `POST /v1/calc` (retorna `calcId`) → `PATCH /v1/calc/{type}/{id}` (preenche campos) → `POST /v1/calc/{type}/{id}/run` (totais + memória) → `GET …/export` (PDF/HTML/Excel). O atalho `POST /v1/correct` faz tudo isso de uma vez para correção monetária.
+
+    **O `calcId` basta em todas as rotas.** Sua credencial identifica a conta e o gateway confere a posse do cálculo (`403` se for de outra) antes de qualquer operação. Por isso `GET /v1/calc` — a mesma lista do dashboard, incluindo o que foi feito no site — é ponto de partida válido: nada precisa ter sido guardado de uma sessão anterior. O `hash` devolvido na criação é o token do **link público** do cálculo (`?id=…&hash=…`, que abre sem login); continua aceito em `PATCH`/`run`/`export`, mas não é exigido.
+
+    ## Formato de erro
+    Todos os erros seguem `{ "error": { "code", "message", "hint?", "docUrl?" } }`. Além dos códigos de autenticação e escopo, os mais comuns na escrita de cálculos são `INVALID_FIELD_FORMAT`/`INVALID_FIELD_VALUE` (400, o lote inteiro é recusado sem gravar), `INDEX_NOT_TABLE` (400), `FIELD_REJECTED` (409) e `ENGINE_ERROR` (502, com a mensagem do motor). A tabela completa está no guia, em `/v1/guia`.
+
+    ## MCP
+    Agentes de IA podem usar o servidor MCP (Streamable HTTP) em `POST /mcp`, com as mesmas credenciais. Discovery OAuth em `/.well-known/oauth-authorization-server`.
+
+    ## Limites (429)
+    Não há cota por plano nem por endpoint. Existe um teto por usuário na ponte que executa o cálculo: **60 operações/minuto** e **300/hora**. Consomem: `POST /v1/calc`, `PATCH`, `run`, `GET /v1/calc/{type}/{id}` e `export` — uma unidade cada; o `PATCH` conta **1 por chamada**, não por campo. Catálogo, séries e `describe` não consomem. A resposta traz `retryAfter` em segundos. Um `429` **sem** o envelope JSON padrão vem da borda (nginx), não do gateway.
 servers:
-- url: https://client-api.debit.com.br/atualiza-v1/
-  description: Servidor de API
+- url: https://mcp.debit.com.br
+  description: Produção
+security:
+- bearerAuth: []
+tags:
+- name: Sistema
+  description: Healthcheck e metadados.
+- name: Autenticação
+  description: Login humano, refresh e logout (JWT).
+- name: Chaves de API
+  description: Gerência de chaves dbt_live_/dbt_test_ (exige JWT).
+- name: Índices
+  description: Catálogo de índices econômicos (IPCA-E, INPC, Selic…) e suas séries.
+- name: Tabelas judiciais
+  description: 'Tabelas de correção do CJF e dos tribunais. Espaço de id próprio: o `calcId` real.'
+- name: Cálculos
+  description: Criar, preencher, rodar, listar e exportar cálculos salvos.
+- name: Correção
+  description: Correção monetária one-shot (atalho).
+- name: Extração
+  description: Extração de documentos por IA.
+- name: MCP
+  description: Servidor Model Context Protocol.
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: Chave do site (UUID), chave dbt_live_… ou JWT
+      description: 'Envie `Authorization: Bearer <credencial>`. Aceita a chave criada no site (painel
+        → menu **API**, formato UUID), a chave desta API (`dbt_live_…`/`dbt_test_…`) ou um JWT de `/v1/auth/login`.
+        Chave inexistente ou revogada → `401 INVALID_API_KEY`.'
+    oauth2:
+      type: oauth2
+      description: OAuth 2.1 (Authorization Code + PKCE + Dynamic Client Registration) — "Login com Debit".
+      flows:
+        authorizationCode:
+          authorizationUrl: https://mcp.debit.com.br/authorize
+          tokenUrl: https://mcp.debit.com.br/token
+          scopes:
+            index:read: Listar índices
+            calc:read: Ler cálculos e schemas
+            calc:write: Criar e editar cálculos
+            calc:export: Exportar PDF/HTML/Excel
+            extract:run: Extrair documentos por IA
+            account:read: Ler dados da conta
+  schemas:
+    Error:
+      type: object
+      description: Envelope de erro padrão.
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              example: FORBIDDEN_SCOPE
+            message:
+              type: string
+              example: 'Escopo necessário: calc:write'
+            hint:
+              type: string
+            docUrl:
+              type: string
+          required:
+          - code
+          - message
+    Index:
+      type: object
+      properties:
+        slug:
+          type: string
+          example: ipca_e
+        id:
+          type: integer
+          example: 45
+        name:
+          type: string
+          example: IPCA-E
+        type:
+          type: string
+          enum:
+          - perc
+          - moeda
+          example: perc
+          description: perc = variação percentual; moeda = valores monetários.
+        coverageStart:
+          type: string
+          format: date
+          example: '1991-12-01'
+        latestAvailable:
+          type: string
+          format: date
+          example: '2026-06-01'
+        mergeable:
+          type: boolean
+          description: Pode ser mesclado com outro índice em períodos distintos.
+    Tokens:
+      type: object
+      properties:
+        user:
+          type: object
+          properties:
+            id:
+              type: integer
+              example: 15
+            nome:
+              type: string
+              example: Marcelo
+            email:
+              type: string
+              example: user@debit.com.br
+        accessToken:
+          type: string
+          description: JWT (HS256), válido ~15 min.
+        refreshToken:
+          type: string
+          description: Token opaco rotativo; guarde com segurança.
+    ApiKey:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 7
+        name:
+          type: string
+          nullable: true
+          example: Integração n8n
+        key_prefix:
+          type: string
+          example: dbt_live_a1b2
+        scopes:
+          type: array
+          items:
+            type: string
+        allowed_tipos:
+          type: array
+          items:
+            type: string
+          nullable: true
+        env:
+          type: string
+          enum:
+          - live
+          - test
+        last_used_at:
+          type: string
+          format: date-time
+          nullable: true
+        revoked:
+          type: integer
+          enum:
+          - 0
+          - 1
+        created_at:
+          type: string
+          format: date-time
+    CorrectResult:
+      type: object
+      properties:
+        total:
+          type: number
+          example: 14231.55
+        correcaoMonetaria:
+          type: number
+        juros:
+          type: number
+        multa:
+          type: number
+        honorarios:
+          type: number
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              date:
+                type: string
+                example: 01/03/2019
+              amount:
+                type: number
+                example: 10000
+              corrected:
+                type: number
+              total:
+                type: number
+              memoria:
+                type: string
+                description: Memória de cálculo resumida.
+        saved:
+          type: boolean
+        calcId:
+          type: integer
+          description: Presente quando save=true.
+        hash:
+          type: string
+          description: Presente quando save=true.
+    FrontendKey:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 500
+        name:
+          type: string
+          nullable: true
+          example: Minha api
+        key_prefix:
+          type: string
+          example: b62d5a5f
+          description: Primeiros 8 caracteres da chave.
+        created:
+          type: string
+          example: '20260714'
+          description: Data de criação no formato AAAAMMDD (formato legado da tela do site).
+        scopes:
+          type: array
+          items:
+            type: string
+        source:
+          type: string
+          enum:
+          - frontend
+          example: frontend
+    SavedCalcSummary:
+      type: object
+      description: Resumo de um cálculo salvo, como aparece no dashboard. O `calcId` basta para abrir,
+        preencher, rodar e exportar — o `hash` não vem aqui e não é necessário.
+      properties:
+        calcId:
+          type: integer
+          description: Identificador do cálculo; use-o nas demais rotas.
+        type:
+          type: string
+          description: Tipo de cálculo (nome usado em /v1/calc/{type}/{id}).
+        name:
+          type: string
+          nullable: true
+          description: Nome dado ao cálculo.
+        createdAt:
+          type: string
+          example: '202608261435'
+          description: Criação, `YYYYMMDDHHmm` — STRING de 12 dígitos, sem os segundos (coluna `diahora`).
+        updatedAt:
+          type: integer
+          format: int64
+          nullable: true
+          example: 20260826143512
+          description: Última alteração, INTEIRO `YYYYMMDDHHmmss` (14 dígitos). Ordena a lista, do mais
+            recente para o mais antigo. Formato diferente do `createdAt` — são colunas diferentes.
+    IndexSeries:
+      type: object
+      description: Série mês a mês. Índice comum traz `value`/`accumulated`; tabela judicial traz `factor`/`selicAccrued`.
+      properties:
+        index:
+          type: object
+          description: Identificação. `kind` é `index` ou `judicial_table`; `tableId` só aparece nas judiciais.
+        basis:
+          type: object
+          description: 'COMO usar os números: `factorField` diz qual campo corrige e `formula` como aplicá-lo.
+            Num índice `perc` quem corrige é `accumulatedPositive`, não `value`.'
+        sampling:
+          type: string
+          enum:
+          - first_day_of_month
+          - as_stored
+          description: '`first_day_of_month` é a amostragem que o cálculo usa. Dólar, euro, Ufesp e Ufir
+            têm série diária.'
+        segments:
+          type: array
+          description: 'Só tabela judicial: marcos — qual índice vale em cada faixa, com a descrição dos
+            percentuais fixados por lei.'
+          items:
+            type: object
+        coverage:
+          type: object
+          description: Extensão total da série, antes do recorte.
+        from:
+          type: string
+          example: 2024-01
+        to:
+          type: string
+          example: 2024-03
+        count:
+          type: integer
+        truncated:
+          type: boolean
+          description: true quando a série passou do teto de linhas da resposta.
+        series:
+          type: array
+          items:
+            type: object
+    JudicialTable:
+      type: object
+      description: 'Tabela judicial de correção (CJF, tribunais). NÃO é um índice: diz qual índice corrige
+        CADA MÊS e quais juros incidem. O `id` é o `calcId` real — o mesmo espaço de id das tabelas criadas
+        em POST /v1/calc {"type":"tabelasJudiciais"} — e é ele que vai em `indexador` de um calculosJudiciais.'
+      properties:
+        id:
+          type: integer
+          example: 23176
+          description: calcId real da tabela. Use este valor em `indexador`.
+        slug:
+          type: string
+          nullable: true
+          example: cjf-condenatoria-geral
+          description: Identificador legível (`urlamigavel`). Resolve nas rotas junto com o id.
+        name:
+          type: string
+          example: 'CJF: Ação condenatória geral'
+        legacyCatalogId:
+          type: integer
+          example: 24176
+          description: Id ANTIGO desta tabela em GET /v1/indices (`id + 1000`), publicado até 26/08/2026.
+            Só para reconhecer integrações velhas — usá-lo em `indexador` responde 400 INDEX_LEGACY_ID.
+        kind:
+          type: string
+          enum:
+          - table
 paths:
-  /atualiza-v1/listaTabelas:
+  /health:
     get:
-      summary: Lista de tabelas disponíveis
-      description: Retorna as tabelas que podem ser consultadas ou atualizadas.
+      tags:
+      - Sistema
+      summary: Healthcheck
+      security: []
+      responses:
+        '200':
+          description: Serviço no ar
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: integer
+                    example: 1
+                  service:
+                    type: string
+                  env:
+                    type: string
+  /v1/auth/login:
+    post:
+      tags:
+      - Autenticação
+      summary: Login (e-mail/login + senha) → JWT + refresh token
+      description: 'Autentica contra a conta principal (tabela `login`). Aceita `identifier` (e-mail ou
+        login) e `senha`. Aliases aceitos: `email`/`login` e `password`.'
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - identifier
+              - senha
+              properties:
+                identifier:
+                  type: string
+                  description: e-mail ou login
+                  example: mrm100
+                senha:
+                  type: string
+                  example: ••••••
+            example:
+              identifier: mrm100
+              senha: minhasenha
+      responses:
+        '200':
+          description: Tokens emitidos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tokens'
+        '400':
+          description: Faltou identifier/senha
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Credenciais inválidas ou acesso restrito (fase de testes)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Limite de uso excedido (60/min ou 300/h por usuário). Veja `retryAfter`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /v1/auth/refresh:
+    post:
+      tags:
+      - Autenticação
+      summary: Rotaciona o refresh token e emite novo JWT
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - refreshToken
+              properties:
+                refreshToken:
+                  type: string
+      responses:
+        '200':
+          description: Novos tokens
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tokens'
+        '401':
+          description: Refresh inválido/expirado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Limite de uso excedido (60/min ou 300/h por usuário). Veja `retryAfter`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /v1/auth/logout:
+    post:
+      tags:
+      - Autenticação
+      summary: Revoga um refresh token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - refreshToken
+              properties:
+                refreshToken:
+                  type: string
+      responses:
+        '200':
+          description: Revogado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+  /v1/keys:
+    get:
+      tags:
+      - Chaves de API
+      summary: Lista as chaves de API do usuário
+      description: |-
+        Exige **JWT** (login humano) — uma chave não lista/cria outra chave.
+
+        `keys` traz as chaves desta API (`dbt_live_…`); `frontendKeys` traz as chaves criadas no site (painel → menu **API**), que também autenticam aqui mas são criadas e revogadas lá. De ambas só o prefixo é exibido — o valor completo aparece uma única vez, na criação.
+      responses:
+        '200':
+          description: Lista de chaves
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  keys:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ApiKey'
+                  frontendKeys:
+                    type: array
+                    description: Chaves criadas no site (painel → menu API). Autenticam em todas as rotas
+                      com todos os escopos; gerenciadas no site.
+                    items:
+                      $ref: '#/components/schemas/FrontendKey'
+        '401':
+          description: Não autenticado (JWT)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Limite de uso excedido (60/min ou 300/h por usuário). Veja `retryAfter`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    post:
+      tags:
+      - Chaves de API
+      summary: Cria uma chave de API
+      description: Exige **JWT**. A chave completa é retornada **uma única vez** — guarde-a. Sem `scopes`,
+        a chave recebe todos os escopos.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  example: Integração n8n
+                scopes:
+                  type: array
+                  items:
+                    type: string
+                  example:
+                  - index:read
+                  - calc:read
+                  - calc:write
+                allowedTipos:
+                  type: array
+                  items:
+                    type: string
+                  description: Restringe a chave a certos tipos de cálculo.
+                  example:
+                  - atualizacaoMonetaria
+                env:
+                  type: string
+                  enum:
+                  - live
+                  - test
+                  default: live
+      responses:
+        '201':
+          description: Chave criada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  key:
+                    type: string
+                    example: dbt_live_a1b2c3...
+                  key_prefix:
+                    type: string
+                  scopes:
+                    type: array
+                    items:
+                      type: string
+                  env:
+                    type: string
+                  warning:
+                    type: string
+        '401':
+          description: Não autenticado (JWT)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Limite de uso excedido (60/min ou 300/h por usuário). Veja `retryAfter`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /v1/keys/{id}:
+    delete:
+      tags:
+      - Chaves de API
+      summary: Revoga uma chave
+      description: Exige **JWT**.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: Revogada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+        '404':
+          description: Chave não encontrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /v1/indices:
+    get:
+      tags:
+      - Índices
+      summary: Lista os índices econômicos disponíveis
+      description: |-
+        Escopo: `index:read`. Resultado em cache curto (10 min).
+
+        Só ÍNDICES (IPCA-E, INPC, Selic…). As TABELAS judiciais — que até 26/08/2026 vinham nesta mesma lista, com o id somado de 1000 — estão em `GET /v1/tables`.
+      responses:
+        '200':
+          description: Lista de índices
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  indices:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Index'
+        '401':
+          description: Não autenticado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Limite de uso excedido (60/min ou 300/h por usuário). Veja `retryAfter`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /v1/indices/{slug}:
+    get:
+      tags:
+      - Índices
+      summary: Detalhe de um índice por slug ou id
+      description: 'Escopo: `index:read`.'
+      parameters:
+      - name: slug
+        in: path
+        required: true
+        schema:
+          type: string
+        example: ipca_e
+        description: slug ou id do ÍNDICE. Tabela judicial NÃO resolve aqui — use `GET /v1/tables/{ref}`
+          (id antigo do catálogo responde 400 INDEX_LEGACY_ID).
+      responses:
+        '200':
+          description: Índice
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Index'
+        '404':
+          description: Índice não encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /v1/indices/{slug}/series:
+    get:
+      tags:
+      - Índices
+      summary: Série mês a mês de um índice ou tabela judicial
+      description: |-
+        Escopo: `index:read`.
+
+        **Leia `basis` antes de usar os números**: num índice `perc` quem corrige é `accumulatedPositive`, não `value` (que é a variação do mês).
+
+        `value: null` com `published: false` é mês ainda não publicado, não deflação.
+
+        **Tabela judicial** (`kind: judicial_table`, id a partir de 1000) não tem série guardada — o coeficiente é calculado. Por isso `asOf` **recalcula**, não recorta. E `factor` e `selicAccrued` andam juntos: nos meses de SELIC o `factor` vale 1 e a correção inteira está no `selicAccrued`, que é aditivo (`corrigido = valor * factor * (1 + selicAccrued/100)`).
+
+        A série não traz juros — para juros use `POST /v1/correct`.
+      parameters:
+      - name: slug
+        in: path
+        required: true
+        description: slug ou id do ÍNDICE. Tabela judicial NÃO resolve aqui — use `GET /v1/tables/{ref}`
+          (id antigo do catálogo responde 400 INDEX_LEGACY_ID).
+        schema:
+          type: string
+        example: ipca_e
+      - name: from
+        in: query
+        required: false
+        description: Mês inicial (AAAA-MM).
+        schema:
+          type: string
+        example: 2024-01
+      - name: to
+        in: query
+        required: false
+        description: Mês final (AAAA-MM).
+        schema:
+          type: string
+        example: 2024-03
+      - name: format
+        in: query
+        required: false
+        description: '`json` (padrão) ou `csv`. Em CSV a resposta vem como anexo.'
+        schema:
+          type: string
+          enum:
+          - json
+          - csv
+          default: json
+        example: csv
+      - name: sampling
+        in: query
+        required: false
+        description: Só índice comum. `monthly` (padrão) devolve a linha do dia 1º, que é a que o cálculo
+          usa; `daily` devolve a série real de quem a tem (dólar, euro, Ufesp, Ufir).
+        schema:
+          type: string
+          enum:
+          - monthly
+          - daily
+          default: monthly
+        example: daily
+      - name: asOf
+        in: query
+        required: false
+        description: 'Sem efeito aqui: `asOf` só vale para tabela judicial, em `GET /v1/tables/{ref}/series`.
+          Índice comum responde 400.'
+        schema:
+          type: string
+        example: '2026-08-01'
+      responses:
+        '200':
+          description: Série
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IndexSeries'
+            text/csv:
+              schema:
+                type: string
+        '400':
+          description: Parâmetro inválido (inclui `asOf` em índice comum)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Índice não encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Índice composto (`multi`), sem série própria
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '502':
+          description: O motor não devolveu a série da tabela judicial
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /v1/describe/{type}:
+    get:
+      tags:
+      - Cálculos
+      summary: Schema de campos de um tipo de cálculo
+      description: 'Escopo: `calc:read`. Retorna os campos aceitos por aquele tipo (curado para `atualizacaoMonetaria`;
+        derivado do motor para os demais), com exemplo.'
+      parameters:
+      - name: type
+        in: path
+        required: true
+        schema:
+          type: string
+          enum:
+          - atualizacaoMonetaria
+          - calculosJudiciais
+          - cartaoPonto
+          - pensaoAlimenticia
+          - saldoDevedor
+          - tabelasFinanciamento
+          - tabelasJudiciais
+          - prevDifNRecebidas
+        example: atualizacaoMonetaria
+      responses:
+        '200':
+          description: Schema do tipo
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  type:
+                    type: string
+                  label:
+                    type: string
+                  source:
+                    type: string
+                    enum:
+                    - curated
+                    - engine
+                  fields:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        campo:
+                          type: string
+                        tipo:
+                          type: string
+                        required:
+                          type: boolean
+                        descricao:
+                          type: string
+                  exemplo:
+                    type: object
+        '404':
+          description: Tipo sem schema
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /v1/correct:
+    post:
+      tags:
+      - Correção
+      summary: Correção monetária (one-shot; save:true persiste na conta)
+      description: 'Atalho que cria, preenche e roda um cálculo `atualizacaoMonetaria` numa só chamada.
+        Escopo: `calc:read` (ou `calc:write` se `save:true`). Com `save:false` (padrão) o cálculo não
+        fica no dashboard.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - updateTo
+              - items
+              properties:
+                index:
+                  oneOf:
+                  - type: string
+                  - type: integer
+                  description: slug ou id de um ÍNDICE econômico. Informe `index` **ou** `table`, nunca
+                    os dois (`400 CONFLICTING_FIELDS`).
+                  example: ipca_e
+                table:
+                  oneOf:
+                  - type: string
+                  - type: integer
+                  description: id (o `calcId` real) ou slug de uma TABELA judicial — liste em `GET /v1/tables`.
+                    A tabela traz os próprios juros e períodos de SELIC, aplicados automaticamente. Alternativa
+                    a `index`.
+                  example: 23176
+                updateTo:
+                  type: string
+                  description: Data-alvo DD/MM/AAAA
+                  example: 01/06/2026
+                items:
+                  type: array
+                  items:
+                    type: object
+                    required:
+                    - date
+                    - amount
+                    properties:
+                      date:
+                        type: string
+                        example: 01/03/2019
+                      amount:
+                        type: number
+                        example: 10000
+                      description:
+                        type: string
+                      custas:
+                        type: boolean
+                juros:
+                  type: object
+                  properties:
+                    percentual:
+                      type: string
+                      example: '1'
+                    from:
+                      type: string
+                      enum:
+                      - vencimento
+                      - citacao
+                multa:
+                  type: object
+                  properties:
+                    percentual:
+                      type: string
+                      example: '2'
+                honorarios:
+                  type: object
+                  properties:
+                    valor:
+                      type: number
+                    modo:
+                      type: string
+                      enum:
+                      - p
+                      - v
+                      description: p=percentual, v=valor fixo
+                selic:
+                  type: boolean
+                  description: Usa SELIC a partir de uma data (EC 113) no lugar de juros. Quando o índice
+                    é uma tabela judicial que já traz período de SELIC, esta opção SUBSTITUI a SELIC da
+                    tabela — as duas nunca somam.
+                selicUntil:
+                  type: string
+                  description: Data final da SELIC da EC 113, DD/MM/AAAA (só vale com selic=true). Omitida
+                    = até a data de atualização. Preenchida, depois dela o índice volta a corrigir e os
+                    juros voltam a correr. Não recorta a SELIC de uma tabela judicial — lá o período é
+                    o que a tabela declara.
+                selicBase:
+                  type: string
+                  enum:
+                  - a
+                  - am
+                  - aj
+                  - ajm
+                  description: 'Base de incidência da SELIC: a=valor atualizado; am=+multa; aj=+juros
+                    (moratórios e compensatórios); ajm=+juros+multa. Omitida em cálculo já existente =
+                    ajm (comportamento histórico); cálculo novo nasce com am.'
+                save:
+                  type: boolean
+                  default: false
+                name:
+                  type: string
+            example:
+              index: ipca_e
+              updateTo: 01/06/2026
+              items:
+              - date: 01/03/2019
+                amount: 10000
+                description: Principal
+              juros:
+                percentual: '1'
+      responses:
+        '200':
+          description: Resultado da correção
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CorrectResult'
+        '400':
+          description: '`BAD_REQUEST` (falta `index`/`table`, `updateTo` ou `items`), `CONFLICTING_FIELDS`
+            (os dois juntos), `INDEX_NOT_FOUND`, `TABLE_NOT_FOUND` ou `INDEX_LEGACY_ID`.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Escopo insuficiente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /v1/calc:
+    post:
+      tags:
+      - Cálculos
+      summary: Cria um cálculo salvo
+      description: 'Escopo: `calc:write`. Retorna `calcId` — a referência usada em todas as outras rotas
+        — e `hash`, que serve para montar o link público do cálculo (`?id=…&hash=…`). Guardar o `hash`
+        é opcional: a API não o exige, e `GET /v1/calc` reencontra o cálculo pelo `calcId`.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - type
+              properties:
+                type:
+                  type: string
+                  example: atualizacaoMonetaria
+                name:
+                  type: string
+      responses:
+        '201':
+          description: Cálculo criado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  calcId:
+                    type: integer
+                  type:
+                    type: string
+                  hash:
+                    type: string
+        '400':
+          description: Tipo inválido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    get:
+      tags:
+      - Cálculos
+      summary: Lista os cálculos do usuário
+      description: 'Escopo: `calc:read`. Mesma lista do dashboard do site — inclui os cálculos criados
+        no site, não só os criados pela API. É o ponto de partida para retomar um cálculo: o `calcId`
+        devolvido aqui basta em `GET`/`PATCH`/`run`/`export`.'
+      parameters:
+      - name: type
+        in: query
+        schema:
+          type: string
+        description: Filtra por tipo.
+      - name: limit
+        in: query
+        schema:
+          type: integer
+      - name: offset
+        in: query
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: Lista
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  calculations:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SavedCalcSummary'
+  /v1/calc/{type}/{id}:
+    get:
+      tags:
+      - Cálculos
+      summary: Abre um cálculo
+      description: 'Escopo: `calc:read`. Devolve o objeto do cálculo — inclusive o campo `hash`, que é
+        o token do link público. O `calcId` basta: a posse é conferida pela conta da credencial.'
+      parameters:
+      - name: type
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      - name: hash
+        in: query
+        schema:
+          type: string
+        description: Opcional. Token do link público do cálculo; a API autoriza pela credencial + posse
+          da conta.
+        required: false
+      responses:
+        '200':
+          description: Cálculo
+          content:
+            application/json:
+              schema:
+                type: object
+    patch:
+      tags:
+      - Cálculos
+      summary: Seta campos (batched)
+      description: |-
+        Escopo: `calc:write`. O `calcId` basta; `hash` é opcional. Veja os campos válidos em `GET /v1/describe/{type}`.
+
+        Os campos vão **dentro** de `fields`. Um campo na raiz do corpo não é gravado e responde `400 NO_FIELDS` listando as chaves recebidas.
+      parameters:
+      - name: type
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - fields
+              properties:
+                hash:
+                  type: string
+                  description: Opcional. Token do link público do cálculo; a autorização da API é a credencial
+                    + a posse conferida por conta.
+                fields:
+                  type: object
+                  description: Mapa campo→valor.
+                  example:
+                    indexador: 45
+                    dia_atualiza: 01/06/2026
+      responses:
+        '200':
+          description: Campos atualizados
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  calcId:
+                    type: integer
+                  updatedFields:
+                    type: array
+                    items:
+                      type: string
+        '400':
+          description: '`NO_FIELDS` (corpo sem `fields`, ou `fields` vazio), `INVALID_FIELD_*`, `INDEX_NOT_TABLE`,
+            `INDEX_LEGACY_ID`, `TABLE_NOT_FOUND` ou `CONFLICTING_FIELDS`.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      tags:
+      - Cálculos
+      summary: Manda o cálculo para a lixeira
+      description: 'Escopo: `calc:write`. Soft-delete (`lixo = 1`), o mesmo do site: o cálculo some de
+        `GET /v1/calc` e continua recuperável pelo site. A API não tem desfazer.'
+      parameters:
+      - name: type
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: Excluído
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  calcId:
+                    type: integer
+                  type:
+                    type: string
+                  deleted:
+                    type: boolean
+        '403':
+          description: '`FORBIDDEN` — o cálculo é de outra conta.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: '`CALC_NOT_FOUND`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /v1/calc/{type}/{id}/run:
+    post:
+      tags:
+      - Cálculos
+      summary: Roda o cálculo (totais + memória)
+      description: 'Escopo: `calc:read`. O `calcId` basta; `hash` é opcional.'
+      parameters:
+      - name: type
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                hash:
+                  type: string
+                  description: Opcional. Token do link público do cálculo; a API autoriza pela credencial
+                    + posse da conta.
+      responses:
+        '200':
+          description: Resultado (totais + memória de cálculo)
+          content:
+            application/json:
+              schema:
+                type: object
+  /v1/calc/{type}/{id}/export:
+    get:
+      tags:
+      - Cálculos
+      summary: Exporta PDF/HTML/Excel
+      description: 'Escopo: `calc:export`. Retorna o arquivo binário com o `Content-Type` correspondente.'
+      parameters:
+      - name: type
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      - name: format
+        in: query
+        schema:
+          type: string
+          enum:
+          - html
+          - pdf
+          - excel
+          default: html
+        description: Formato do demonstrativo. HTML existe nos 8 tipos; PDF e Excel só em pensaoAlimenticia.
+          Formato indisponível para o tipo → 400 EXPORT_UNAVAILABLE, com a lista do que há.
+      - name: hash
+        in: query
+        schema:
+          type: string
+        description: Opcional. Token do link público do cálculo; a API autoriza pela credencial + posse
+          da conta.
+        required: false
+      responses:
+        '200':
+          description: Arquivo
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+            text/html:
+              schema:
+                type: string
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+  /v1/extract:
+    post:
+      tags:
+      - Extração
+      summary: Extração de documento por IA
+      description: 'Escopo: `extract:run`. Envie o arquivo como **multipart** (campo `file` ou `arq`)
+        OU como `fileBase64` no JSON. `docType`: `cnis` | `sentenca` | `cartaoPonto` | `trabalhista`.
+        Limite ~25 MB.'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                docType:
+                  type: string
+                  enum:
+                  - cnis
+                  - sentenca
+                  - cartaoPonto
+                  - trabalhista
+          application/json:
+            schema:
+              type: object
+              required:
+              - fileBase64
+              - docType
+              properties:
+                fileBase64:
+                  type: string
+                filename:
+                  type: string
+                mimeType:
+                  type: string
+                docType:
+                  type: string
+                  enum:
+                  - cnis
+                  - sentenca
+                  - cartaoPonto
+                  - trabalhista
+      responses:
+        '200':
+          description: Dados estruturados extraídos
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          description: Sem arquivo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /mcp:
+    post:
+      tags:
+      - MCP
+      summary: Servidor MCP (Streamable HTTP)
+      description: 'Transporte stateless JSON-RPC 2.0. Auth: `Authorization: Bearer` (chave de API ou
+        token OAuth). As 10 tools espelham os endpoints REST.'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Envelope JSON-RPC 2.0.
+      responses:
+        '200':
+          description: Resposta JSON-RPC
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          description: Sem Bearer válido (header WWW-Authenticate aponta a discovery)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Limite de uso excedido (60/min ou 300/h por usuário). Veja `retryAfter`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /v1/tables:
+    get:
+      tags:
+      - Tabelas judiciais
+      summary: Lista as tabelas judiciais (CJF, tribunais)
+      description: 'Escopo: `index:read`. O `id` devolvido é o `calcId` real da tabela — o valor que vai
+        em `indexador` de um `calculosJudiciais`/`prevDifNRecebidas`, e em `tabelaJudicial` de um `atualizacaoMonetaria`.'
       responses:
         '200':
           description: Lista de tabelas
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  type: object
-                  properties:
-                    tabela:
-                      type: string
-                    nome:
-                      type: string
-                    permiteSelic:
-                      type: boolean
-  /atualiza-v1/lerTabela:
-    post:
-      summary: Consulta de valores de índice
-      description: Consulta os valores atualizados de um índice específico.
-      requestBody:
+                type: object
+                properties:
+                  tables:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/JudicialTable'
+        '401':
+          description: Não autenticado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Limite de uso excedido (60/min ou 300/h por usuário). Veja `retryAfter`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /v1/tables/{ref}:
+    get:
+      tags:
+      - Tabelas judiciais
+      summary: Detalhe de uma tabela judicial
+      description: 'Escopo: `index:read`.'
+      parameters:
+      - name: ref
+        in: path
         required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-              - apikey
-              - tabela
-              - dataAtualizacao
-              properties:
-                apikey:
-                  type: string
-                tabela:
-                  type: string
-                dataAtualizacao:
-                  type: string
-                  format: date
-                dataInicioSelic:
-                  type: string
-                  format: date
+        schema:
+          type: string
+        description: 'calcId real da tabela (ex.: 23176) ou o slug.'
+        example: '23176'
       responses:
         '200':
-          description: Valores retornados com sucesso
+          description: Tabela
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JudicialTable'
         '400':
-          description: Erro na autenticação ou dados inválidos
-  /atualiza-v1/atualiza:
-    post:
-      summary: Atualiza valores informados
-      description: Processa uma lista de valores históricos aplicando os índices de
-        atualização monetária.
-      requestBody:
+          description: '`INDEX_LEGACY_ID` — id no formato antigo do catálogo (`calcId + 1000`). A mensagem
+            traz o id correto.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: '`TABLE_NOT_FOUND`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /v1/tables/{ref}/series:
+    get:
+      tags:
+      - Tabelas judiciais
+      summary: Coeficientes mês a mês de uma tabela judicial
+      description: 'Escopo: `index:read`. A série de uma tabela é **calculada** (o banco guarda a definição,
+        nunca os coeficientes), e por isso depende de `asOf`. Leia o campo `basis` da resposta: `selicAccrued`
+        é ADITIVO e não está embutido em `factor`.'
+      parameters:
+      - name: ref
+        in: path
         required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-              - indiceAtualizacao
-              - dataAtualizacao
-              - lista
-              - apikey
-              properties:
-                apikey:
-                  type: string
-                indiceAtualizacao:
-                  type: string
-                dataAtualizacao:
-                  type: string
-                  format: date
-                lista:
-                  type: array
-                  items:
-                    type: object
-                    required:
-                    - dia
-                    - valor
-                    properties:
-                      dia:
-                        type: string
-                        format: date
-                      valor:
-                        type: number
+        description: 'calcId real da tabela (ex.: 23176) ou o slug. **Não** é o id antigo do catálogo.'
+        schema:
+          type: string
+        example: '23176'
+      - name: from
+        in: query
+        required: false
+        description: Mês inicial (AAAA-MM).
+        schema:
+          type: string
+        example: 2024-01
+      - name: to
+        in: query
+        required: false
+        description: Mês final (AAAA-MM).
+        schema:
+          type: string
+        example: 2024-03
+      - name: format
+        in: query
+        required: false
+        description: '`json` (padrão) ou `csv`. Em CSV a resposta vem como anexo.'
+        schema:
+          type: string
+          enum:
+          - json
+          - csv
+          default: json
+        example: csv
+      - name: asOf
+        in: query
+        required: false
+        description: '**Só tabela judicial.** Data de referência da correção (AAAA-MM-DD). Muda os coeficientes;
+          em índice comum devolve 400.'
+        schema:
+          type: string
+        example: '2026-08-01'
       responses:
         '200':
-          description: Cálculo realizado com sucesso
+          description: Série
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IndexSeries'
+            text/csv:
+              schema:
+                type: string
         '400':
-          description: Erro nos dados ou autenticação
+          description: '`BAD_REQUEST` (janela inválida) ou `INDEX_LEGACY_ID` (id no formato antigo — a
+            mensagem traz o id correto).'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: '`TABLE_NOT_FOUND`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Índice composto (`multi`), sem série própria
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '502':
+          description: O motor não devolveu a série da tabela judicial
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'

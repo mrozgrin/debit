@@ -1,14 +1,25 @@
 {
-  "name": "debit",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+  "name": "debit-api",
+  "version": "2.0.0",
+  "description": "Documentação e exemplos da Debit API (REST /v1 e servidor MCP) — https://mcp.debit.com.br",
+  "homepage": "https://mcp.debit.com.br/v1/guia",
+  "keywords": [
+    "debit",
+    "api",
+    "mcp",
+    "calculo-judicial",
+    "correcao-monetaria",
+    "indices"
+  ],
+  "engines": {
+    "node": ">=18"
   },
-  "author": "",
-  "license": "ISC",
-  "dependencies": {
-    "axios": "^1.7.7"
-  }
+  "scripts": {
+    "exemplo:indices": "node exemplos/indices.js",
+    "exemplo:serie": "node exemplos/serieIndice.js",
+    "exemplo:corrigir": "node exemplos/corrigir.js",
+    "exemplo:salvo": "node exemplos/calculoSalvo.js"
+  },
+  "author": "Debit <debit@debit.com.br>",
+  "license": "MIT"
 }

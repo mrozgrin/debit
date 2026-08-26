@@ -2,3 +2,5 @@
 .DS_Store
 node_modules
 exemplos/.env
+exemplos/demonstrativo.html
+demonstrativo.html

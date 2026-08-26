@@ -2,14 +2,17 @@
   "schema_version": "v1",
   "name_for_human": "Debit API",
   "name_for_model": "debit",
-  "description_for_human": "Faz cálculos jurídicos e consultas de processos.",
-  "description_for_model": "Use esta API para cálculos trabalhistas, correções monetárias, e análise de processos judiciais.",
+  "description_for_human": "Cálculos jurídicos e financeiros do Brasil: correção monetária, liquidação de sentença, pensão alimentícia, cartão de ponto e financiamento.",
+  "description_for_model": "Use esta API para correção monetária por índice ou tabela judicial, liquidação de sentença, pensão alimentícia, cartão de ponto, financiamento e diferenças previdenciárias. Prefira o servidor MCP em https://mcp.debit.com.br/mcp.",
   "auth": {
-    "type": "api_key",
-    "api_key_name": "Authorization"
+    "type": "user_http",
+    "authorization_type": "bearer"
   },
   "api": {
     "type": "openapi",
-    "url": "https://github.com/mrozgrin/debit/blob/main/openapi.yaml"
-  }
+    "url": "https://mcp.debit.com.br/v1/openapi.json"
+  },
+  "logo_url": "https://www.debit.com.br/img/logo.png",
+  "contact_email": "debit@debit.com.br",
+  "legal_info_url": "https://www.debit.com.br"
 }
