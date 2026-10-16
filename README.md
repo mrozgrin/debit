@@ -43,9 +43,8 @@ O Debit não possui sandbox (ambiente de homologação). Cada conta do Debit é 
 (multi-tenant), sugerimos aos desenvolvedores que criem uma conta de testes, e depois utilizem a
 conta de produção com os dados dos clientes.
 
-`POST /v1/keys` aceita `"env":"test"` e devolve uma chave `dbt_test_…`, mas isso é **só um
-rótulo** para você separar credenciais: ela fala com a mesma base de produção e os cálculos que
-criar são reais. Para experimentar sem sujar a conta, use `POST /v1/correct` sem `save` (não
+Uma chave `dbt_test_…` (emitida pela API até 16/10/2026) é **só um rótulo**: ela fala com a mesma
+base de produção e os cálculos que criar são reais. Para experimentar sem sujar a conta, use `POST /v1/correct` sem `save` (não
 persiste nada) ou apague depois com `DELETE /v1/calc/{type}/{id}`.
 
 Para testar a API, crie uma conta gratuitamente, acesse o sistema e clique no menu
@@ -69,18 +68,20 @@ Toda rota exige credencial, exceto `/health` e `/v1/auth/*`. Há quatro tipos:
 | Tipo | Formato | Como obter | Quando usar |
 |---|---|---|---|
 | **Chave do site** | UUID (`b62d5a5f-…`) | Painel do Debit → menu **API** | O jeito mais simples: pega no site e usa |
-| **Chave de API** | `dbt_live_…` / `dbt_test_…` | `POST /v1/keys` (exige JWT) | Servidor↔servidor, automações, agentes; permite escopos |
-| **JWT** | `eyJ…` (~15 min) | `POST /v1/auth/login` | Sessão humana; **obrigatório** para gerenciar chaves |
+| **Chave de API** | `dbt_live_…` / `dbt_test_…` | Não se cria mais (desde 16/10/2026); as emitidas seguem valendo | Servidor↔servidor, automações, agentes; pode ter escopos restritos |
+| **JWT** | `eyJ…` (~15 min) | `POST /v1/auth/login` | Sessão humana; **obrigatório** para listar e revogar chaves |
 | **OAuth 2.1** | Bearer via "Login com Debit" | `/authorize` (PKCE + DCR) | Conectores MCP (Claude, ChatGPT) |
 
-Apagar a chave em https://app.debit.com.br/menu/api revoga o acesso imediatamente.
+**A chave só se cria no site** (https://app.debit.com.br/menu/api). A API não emite chave —
+`POST /v1/keys` responde `410 KEY_CREATION_REMOVED` — e o MCP também não; conectores MCP usam o
+OAuth "Login com Debit". Apagar a chave nessa mesma tela revoga o acesso imediatamente.
 
 ### Escopos
 
 `index:read` · `calc:read` · `calc:write` · `calc:export` · `extract:run` · `account:read`
 
-A chave criada no site recebe todos (a tela não tem seletor). A `dbt_live_` pode ser restringida
-na criação. Sem o escopo necessário → `403 FORBIDDEN_SCOPE`; sem credencial válida → `401`.
+A chave criada no site recebe todos (a tela não tem seletor). Uma `dbt_live_` já emitida mantém os
+escopos com que nasceu. Sem o escopo necessário → `403 FORBIDDEN_SCOPE`; sem credencial válida → `401`.
 
 
 ## Métodos

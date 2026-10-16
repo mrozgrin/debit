@@ -1,8 +1,9 @@
 /*
  * Ajudante comum dos exemplos — Node 18+ (fetch nativo), sem dependências.
  *
- * A chave é a mesma do painel do Debit (menu → API) ou uma dbt_live_ criada em
- * POST /v1/keys. Ela SEMPRE viaja no cabeçalho Authorization: Bearer.
+ * A chave é a do painel do Debit (menu → API) — a API não cria chave. Uma
+ * dbt_live_ emitida antes de 16/10/2026 também vale. Ela SEMPRE viaja no
+ * cabeçalho Authorization: Bearer.
  *
  *   export DEBIT_API_KEY=sua-chave
  *   export DEBIT_API_BASE=https://mcp.debit.com.br   # opcional

@@ -28,14 +28,16 @@ info:
     | Tipo | Formato | Obtido em | Uso |
     |------|---------|-----------|-----|
     | **Chave do site** | UUID (`b62d5a5f-…`) | Painel debit → menu **API** | Jeito mais simples; todos os escopos |
-    | **Chave de API** | `dbt_live_…` / `dbt_test_…` | `POST /v1/keys` | Servidor a servidor, agentes; escopos restritos |
-    | **JWT** | `eyJ…` (15 min) | `POST /v1/auth/login` | Sessão humana; **obrigatório** para gerenciar chaves |
+    | **Chave de API** | `dbt_live_…` / `dbt_test_…` | Não se cria mais (desde 16/10/2026); as emitidas seguem valendo | Servidor a servidor, agentes; escopos restritos |
+    | **JWT** | `eyJ…` (15 min) | `POST /v1/auth/login` | Sessão humana; **obrigatório** para listar e revogar chaves |
     | **OAuth 2.1** | Bearer emitido via "Login com Debit" | `/authorize` (PKCE + DCR) | Conectores MCP (Claude, ChatGPT) |
 
     Sem credencial válida → **401**. Escopo insuficiente → **403**.
 
+    **Chave só se cria no site** (painel → menu **API**). A API não emite chave — `POST /v1/keys` responde `410 KEY_CREATION_REMOVED` — e o MCP não tem tool para isso; conectores MCP usam o OAuth "Login com Debit".
+
     ## Escopos
-    `index:read` · `calc:read` · `calc:write` · `calc:export` · `extract:run` · `account:read`. Uma chave nasce com todos por padrão; restrinja em `POST /v1/keys`. A chave criada no site não tem seletor de escopo — recebe todos.
+    `index:read` · `calc:read` · `calc:write` · `calc:export` · `extract:run` · `account:read`. A chave criada no site não tem seletor de escopo — recebe todos. Uma `dbt_live_` emitida antes de 16/10/2026 mantém os escopos com que nasceu; no OAuth valem os escopos autorizados no consentimento.
 
     ## Tipos de cálculo
     `atualizacaoMonetaria`, `calculosJudiciais`, `cartaoPonto`, `pensaoAlimenticia`, `saldoDevedor`, `tabelasFinanciamento`, `tabelasJudiciais`, `prevDifNRecebidas`. Use `GET /v1/describe/{type}` para o schema de campos de cada um.
@@ -82,7 +84,7 @@ tags:
 - name: Autenticação
   description: Login humano, refresh e logout (JWT).
 - name: Chaves de API
-  description: Gerência de chaves dbt_live_/dbt_test_ (exige JWT).
+  description: Listar e revogar chaves dbt_live_/dbt_test_ (exige JWT). Criar chave é só no site.
 - name: Índices
   description: Catálogo de índices econômicos (IPCA-E, INPC, Selic…) e suas séries.
 - name: Tabelas judiciais
@@ -102,7 +104,7 @@ components:
       scheme: bearer
       bearerFormat: Chave do site (UUID), chave dbt_live_… ou JWT
       description: 'Envie `Authorization: Bearer <credencial>`. Aceita a chave criada no site (painel
-        → menu **API**, formato UUID), a chave desta API (`dbt_live_…`/`dbt_test_…`) ou um JWT de `/v1/auth/login`.
+        → menu **API**, formato UUID), uma chave `dbt_live_…`/`dbt_test_…` emitida antes de 16/10/2026 ou um JWT de `/v1/auth/login`.
         Chave inexistente ou revogada → `401 INVALID_API_KEY`.'
     oauth2:
       type: oauth2
@@ -536,9 +538,9 @@ paths:
       - Chaves de API
       summary: Lista as chaves de API do usuário
       description: |-
-        Exige **JWT** (login humano) — uma chave não lista/cria outra chave.
+        Exige **JWT** (login humano) — uma chave não lista outra chave.
 
-        `keys` traz as chaves desta API (`dbt_live_…`); `frontendKeys` traz as chaves criadas no site (painel → menu **API**), que também autenticam aqui mas são criadas e revogadas lá. De ambas só o prefixo é exibido — o valor completo aparece uma única vez, na criação.
+        `keys` traz as chaves `dbt_live_…` emitidas por esta API até 16/10/2026; `frontendKeys` traz as chaves criadas no site (painel → menu **API**), que autenticam aqui mas são criadas e revogadas lá. De ambas só o prefixo é exibido.
       responses:
         '200':
           description: Lista de chaves
@@ -572,70 +574,21 @@ paths:
     post:
       tags:
       - Chaves de API
-      summary: Cria uma chave de API
-      description: Exige **JWT**. A chave completa é retornada **uma única vez** — guarde-a. Sem `scopes`,
-        a chave recebe todos os escopos.
-      requestBody:
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                name:
-                  type: string
-                  example: Integração n8n
-                scopes:
-                  type: array
-                  items:
-                    type: string
-                  example:
-                  - index:read
-                  - calc:read
-                  - calc:write
-                allowedTipos:
-                  type: array
-                  items:
-                    type: string
-                  description: Restringe a chave a certos tipos de cálculo.
-                  example:
-                  - atualizacaoMonetaria
-                env:
-                  type: string
-                  enum:
-                  - live
-                  - test
-                  default: live
+      summary: Desativado — a API não cria chaves
+      deprecated: true
+      description: '**Desativado em 16/10/2026.** Responde sempre `410 KEY_CREATION_REMOVED`, com qualquer
+        credencial e qualquer corpo. Crie a chave no site da debit (painel → menu **API** → "Minhas chaves
+        de API"). Conectores MCP (Claude, ChatGPT) não precisam de chave: usam o OAuth "Login com Debit".
+        As chaves `dbt_live_` já emitidas continuam valendo e podem ser revogadas em `DELETE /v1/keys/{id}`.'
       responses:
-        '201':
-          description: Chave criada
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  id:
-                    type: integer
-                  key:
-                    type: string
-                    example: dbt_live_a1b2c3...
-                  key_prefix:
-                    type: string
-                  scopes:
-                    type: array
-                    items:
-                      type: string
-                  env:
-                    type: string
-                  warning:
-                    type: string
         '401':
-          description: Não autenticado (JWT)
+          description: Sem credencial válida
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-        '429':
-          description: Limite de uso excedido (60/min ou 300/h por usuário). Veja `retryAfter`.
+        '410':
+          description: '`KEY_CREATION_REMOVED` — a criação de chaves pela API foi desativada.'
           content:
             application/json:
               schema:
