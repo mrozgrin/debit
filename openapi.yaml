@@ -34,6 +34,8 @@ info:
 
     Sem credencial válida → **401**. Escopo insuficiente → **403**.
 
+    **Só para assinantes** (desde 28/10/2026): conta sem plano Debit Atualiza, Trabalhista ou Cálculos vigente recebe **403** `SUBSCRIPTION_REQUIRED` em todas as rotas, menos `GET /v1/me`. Planos: https://www.debit.com.br/precos
+
     **Chave só se cria no site** (painel → menu **API**). A API não emite chave — `POST /v1/keys` responde `410 KEY_CREATION_REMOVED` — e o MCP não tem tool para isso; conectores MCP usam o OAuth "Login com Debit".
 
     ## Escopos

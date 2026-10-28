@@ -47,11 +47,13 @@ Uma chave `dbt_test_…` (emitida pela API até 16/10/2026) é **só um rótulo*
 base de produção e os cálculos que criar são reais. Para experimentar sem sujar a conta, use `POST /v1/correct` sem `save` (não
 persiste nada) ou apague depois com `DELETE /v1/calc/{type}/{id}`.
 
-Para testar a API, crie uma conta gratuitamente, acesse o sistema e clique no menu
-configurações. Na aba API você gera a api_key (https://app.debit.com.br/menu/api).
+**A API é exclusiva para assinantes** (desde 28/10/2026). Para usar, crie uma conta, assine um plano
+Debit Atualiza, Trabalhista ou Cálculos (https://www.debit.com.br/precos) e gere a chave no menu
+configurações, aba API (https://app.debit.com.br/menu/api).
 
-O acesso está em liberação gradual por conta. Credencial válida numa conta ainda não liberada
-responde `401 NOT_ALLOWED` — peça a liberação por debit@debit.com.br.
+Conta sem assinatura ativa recebe `403 SUBSCRIPTION_REQUIRED` em todas as rotas, menos `GET /v1/me`,
+que continua respondendo para você conferir a conta. No MCP, as tools devolvem a mesma mensagem.
+Depois de assinar, o acesso volta em até um minuto.
 
 
 ## Autenticação
@@ -108,8 +110,8 @@ Todo erro vem no mesmo envelope:
 |---|---|
 | `200` | Requisição executada com sucesso (success).|
 | `400` | Erros de validação, campo fora do schema ou tipo de cálculo inexistente.|
-| `401` | Chave inválida/revogada (`INVALID_API_KEY`), ou conta fora da liberação (`NOT_ALLOWED`).|
-| `403` | Escopo insuficiente, ou o cálculo é de outra conta.|
+| `401` | Chave inválida/revogada (`INVALID_API_KEY`) ou token expirado (`INVALID_TOKEN`).|
+| `403` | Escopo insuficiente, o cálculo é de outra conta, ou a conta não tem assinatura ativa (`SUBSCRIPTION_REQUIRED`).|
 | `404` | Registro pesquisado não encontrado (Not found).|
 | `409` | O motor recusou o valor do campo (`FIELD_REJECTED`).|
 | `413` | Arquivo acima de 25 MB em `/v1/extract`.|
